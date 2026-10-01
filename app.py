@@ -39,6 +39,7 @@ state = {
 }
 oauth_state = None
 access_token = None
+app_access_token = None
 broadcaster_user_id = None
 
 
@@ -192,7 +193,7 @@ def oauth_login():
         "client_id": CLIENT_ID,
         "redirect_uri": f"{PUBLIC_BASE_URL}/oauth/callback",
         "response_type": "code",
-        "scope": "channel:read:subscriptions",
+        "scope": "channel:read:subscriptions bits:read",
         "state": oauth_state,
     }
     return redirect("https://id.twitch.tv/oauth2/authorize?" + urlencode(params))
@@ -239,7 +240,7 @@ def oauth_callback():
         broadcaster_user_id = None
         return "The Twitch account you authorized does not match TWITCH_BROADCASTER_LOGIN.", 400
 
-    return redirect("/setup")
+    return redirect(f"/setup?token={ADMIN_TOKEN}")
 
 
 @app.get("/setup")
@@ -252,7 +253,31 @@ def setup():
     return jsonify(result)
 
 
+def get_app_access_token():
+    global app_access_token
+    if app_access_token:
+        # App tokens are normally valid for about 60 days. Reusing the token is
+        # sufficient for this small service; a failed EventSub request will
+        # cause a fresh token to be requested below.
+        return app_access_token
+
+    r = requests.post(
+        "https://id.twitch.tv/oauth2/token",
+        params={
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "grant_type": "client_credentials",
+        },
+        timeout=15,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"Could not obtain Twitch app access token: {r.text}")
+    app_access_token = r.json()["access_token"]
+    return app_access_token
+
+
 def create_eventsub_subscriptions():
+    global app_access_token
     callback = f"{PUBLIC_BASE_URL}/webhooks/twitch"
     event_types = ["channel.subscribe", "channel.cheer", "channel.raid"]
 
@@ -270,10 +295,19 @@ def create_eventsub_subscriptions():
         }
         r = requests.post(
             "https://api.twitch.tv/helix/eventsub/subscriptions",
-            headers=twitch_headers(access_token),
+            headers=twitch_headers(get_app_access_token()),
             json=payload,
             timeout=15,
         )
+        # If the cached app token has expired/revoked, obtain a fresh one once.
+        if r.status_code == 401:
+            app_access_token = None
+            r = requests.post(
+                "https://api.twitch.tv/helix/eventsub/subscriptions",
+                headers=twitch_headers(get_app_access_token()),
+                json=payload,
+                timeout=15,
+            )
         results.append({
             "type": event_type,
             "status": r.status_code,
