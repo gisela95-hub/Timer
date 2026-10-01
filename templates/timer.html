@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subathon Timer</title>
+<style>
+html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden;font-family:Arial,sans-serif}
+.wrap{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;text-shadow:0 3px 10px #000}
+#timer{font-size:clamp(80px,16vw,240px);font-weight:900;line-height:.9;letter-spacing:2px}
+#status{margin-top:20px;font-size:clamp(18px,3vw,40px);font-weight:700}
+#stats{margin-top:8px;font-size:clamp(14px,2vw,26px);opacity:.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="timer">00:00:00</div>
+  <div id="status">SUBATHON</div>
+  <div id="stats"></div>
+</div>
+<script>
+let last = null;
+function fmt(total){
+  total=Math.max(0,Math.floor(total));
+  const h=Math.floor(total/3600), m=Math.floor((total%3600)/60), s=total%60;
+  return [h,m,s].map((v,i)=>String(v).padStart(i===0?2:2,'0')).join(':');
+}
+async function update(){
+  try{
+    const r=await fetch('/api/state',{cache:'no-store'});
+    const d=await r.json();
+    last=d;
+    document.getElementById('timer').textContent=fmt(d.remaining);
+    document.getElementById('status').textContent=d.running?'LIVE':'PAUSED / ENDED';
+    document.getElementById('stats').textContent=`Subs: ${d.subs}  •  Gifted: ${d.gifted_subs}  •  Bits: ${d.bits.toLocaleString()}`;
+  }catch(e){}
+}
+update();
+setInterval(update,1000);
+</script>
+</body>
+</html>

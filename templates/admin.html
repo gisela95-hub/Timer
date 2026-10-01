@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Subathon Admin</title>
+<style>body{font-family:Arial;max-width:700px;margin:40px auto;padding:20px}button{padding:12px 18px;margin:5px;cursor:pointer}input{padding:10px;width:100px}</style>
+</head>
+<body>
+<h1>Subathon Admin</h1>
+<p>Token is already supplied for this session.</p>
+<button onclick="post('/api/admin/start',{seconds:Number(document.getElementById('start').value)*60})">Start</button>
+<input id="start" value="60" type="number"> minutes
+<br>
+<button onclick="add()">Add time</button>
+<input id="add" value="10" type="number"> minutes
+<br>
+<button onclick="post('/api/admin/pause',{})">Pause</button>
+<button onclick="post('/api/admin/reset',{})">Reset</button>
+<pre id="out"></pre>
+<script>
+const token = new URLSearchParams(location.search).get('token');
+async function post(path,body){
+ const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Token':token},body:JSON.stringify(body)});
+ document.getElementById('out').textContent=await r.text();
+}
+function add(){post('/api/admin/add',{seconds:Number(document.getElementById('add').value)*60})}
+</script>
+</body></html>
